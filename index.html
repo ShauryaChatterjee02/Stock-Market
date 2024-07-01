@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradingView Chart with Yahoo Finance Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+      .watchlist {
+        width: 200px;
+        border-left: 1px solid #ccc;
+        transition: background-color 0.3s, color 0.3s;
+      }
+      .watchlist-item {
+        padding: 10px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+      .chart-container {
+        width: 100%;
+        height: calc(100vh - 4rem);
+      }
+    </style>
+  </head>
+  <body class="bg-white text-black">
+    <div class="flex h-screen">
+      <div class="flex-grow flex flex-col">
+        <header class="p-4 bg-gray-800 text-white">
+          <div class="flex justify-between items-center mt-4">
+            <div id="controls" class="flex space-x-4 items-center">
+              <div class="flex items-center space-x-2">
+                <label for="ticker" class="text-white">Symbol</label>
+                <input
+                  type="text"
+                  id="ticker"
+                  class="p-2 rounded border w-24 bg-gray-900 text-white"
+                  placeholder="Symbol"
+                />
+              </div>
+              <div class="flex items-center space-x-2">
+                <label for="timeframe" class="text-white">Interval</label>
+                <select
+                  id="timeframe"
+                  class="p-2 rounded border w-20 bg-gray-900 text-white"
+                >
+                  <option value="1m">1m</option>
+                  <option value="5m">5m</option>
+                  <option value="15m">15m</option>
+                  <option value="60m">1h</option>
+                  <option value="1d" selected>1d</option>
+                  <option value="1wk">1wk</option>
+                  <option value="1mo">1mo</option>
+                </select>
+              </div>
+              <div class="flex items-center space-x-2">
+                <label for="emaPeriod" class="text-white">EMA</label>
+                <input
+                  type="number"
+                  id="emaPeriod"
+                  class="p-2 rounded border w-16 bg-gray-900 text-white"
+                  placeholder="EMA"
+                  value="20"
+                  min="1"
+                  max="200"
+                />
+              </div>
+              <div class="flex items-center space-x-2">
+                <label for="rsiPeriod" class="text-white">RSI</label>
+                <input
+                  type="number"
+                  id="rsiPeriod"
+                  class="p-2 rounded border w-16 bg-gray-900 text-white"
+                  placeholder="RSI"
+                  value="14"
+                  min="1"
+                  max="200"
+                />
+              </div>
+              <button id="fetchData" class="p-2 bg-blue-500 text-white rounded">
+                Fetch Data
+              </button>
+              <div class="flex items-center space-x-2">
+                <label for="autoUpdate" class="text-white">Auto-update</label>
+                <input
+                  type="checkbox"
+                  id="autoUpdate"
+                  class="p-2 rounded border"
+                />
+              </div>
+              <div class="flex items-center space-x-2">
+                <label for="updateFrequency" class="text-white"
+                  >Frequency (s)</label
+                >
+                <input
+                  type="number"
+                  id="updateFrequency"
+                  class="p-2 rounded border w-12 bg-gray-900 text-white"
+                  placeholder="5"
+                  value="5"
+                  min="1"
+                />
+              </div>
+            </div>
+            <button id="themeToggle" class="p-2 bg-gray-700 text-white rounded">
+              Toggle Theme
+            </button>
+          </div>
+        </header>
+        <main class="flex-grow">
+          <div id="chart" class="chart-container"></div>
+          <div id="rsiChart" class="chart-container"></div>
+        </main>
+      </div>
+    </div>
+    <script>
+      $(document).ready(function () {
+        // Fetch symbols for autocomplete
+        $.getJSON("/api/symbols", function (data) {
+          $("#ticker").autocomplete({
+            source: data,
+          });
+        });
+
+        // Initialize charts
+        const chart = LightweightCharts.createChart(
+          document.getElementById("chart"),
+          {
+            width: document.getElementById("chart").clientWidth,
+            height: document.getElementById("chart").clientHeight,
+            layout: {
+              backgroundColor: "#FFFFFF",
+              textColor: "#000000",
+            },
+            grid: {
+              vertLines: {
+                color: "transparent",
+              },
+              horzLines: {
+                color: "transparent",
+              },
+            },
+            crosshair: {
+              mode: LightweightCharts.CrosshairMode.Normal,
+            },
+            rightPriceScale: {
+              borderColor: "#e1e1e1",
+            },
+            timeScale: {
+              borderColor: "#e1e1e1",
+            },
+          }
+        );
+
+        const candlestickSeries = chart.addCandlestickSeries();
+        const emaSeries = chart.addLineSeries({
+          color: "blue",
+          lineWidth: 2,
+        });
+
+        const rsiChart = LightweightCharts.createChart(
+          document.getElementById("rsiChart"),
+          {
+            width: document.getElementById("rsiChart").clientWidth,
+            height: document.getElementById("rsiChart").clientHeight,
+            layout: {
+              backgroundColor: "#FFFFFF",
+              textColor: "#000000",
+            },
+            grid: {
+              vertLines: {
+                color: "transparent",
+              },
+              horzLines: {
+                color: "transparent",
+              },
+            },
+            crosshair: {
+              mode: LightweightCharts.CrosshairMode.Normal,
+            },
+            rightPriceScale: {
+              borderColor: "#e1e1e1",
+            },
+            timeScale: {
+              borderColor: "#e1e1e1",
+            },
+          }
+        );
+
+        const rsiSeries = rsiChart.addLineSeries({
+          color: "red",
+          lineWidth: 2,
+        });
+
+        function fetchData() {
+          var ticker = $("#ticker").val();
+          var interval = $("#timeframe").val();
+          var emaPeriod = $("#emaPeriod").val();
+          var rsiPeriod = $("#rsiPeriod").val();
+
+          $.getJSON(
+            `/api/data/${ticker}/${interval}/${emaPeriod}/${rsiPeriod}`,
+            function (data) {
+              updateChart(data.candlestick, data.ema, data.rsi);
+            }
+          );
+        }
+
+        $("#fetchData").click(fetchData);
+
+        var autoUpdateInterval;
+
+        $("#autoUpdate").change(function () {
+          if (this.checked) {
+            autoUpdateInterval = setInterval(
+              fetchData,
+              $("#updateFrequency").val() * 1000
+            );
+          } else {
+            clearInterval(autoUpdateInterval);
+          }
+        });
+
+        function updateChart(candlestickData, emaData, rsiData) {
+          console.log("Updating charts...");
+
+          candlestickSeries.setData(candlestickData);
+          emaSeries.setData(emaData);
+          rsiSeries.setData(rsiData);
+        }
+
+        $("#themeToggle").click(function () {
+          $("body").toggleClass("bg-white bg-black text-black text-white");
+          $("input, select").toggleClass(
+            "bg-gray-900 bg-gray-300 text-white text-black"
+          );
+          $("button").toggleClass("bg-blue-500 bg-blue-700");
+
+          const isDark = $("body").hasClass("bg-black");
+
+          chart.applyOptions({
+            layout: {
+              backgroundColor: isDark ? "#000000" : "#FFFFFF",
+              textColor: isDark ? "#FFFFFF" : "#000000",
+            },
+            grid: {
+              vertLines: {
+                color: "transparent",
+              },
+              horzLines: {
+                color: "transparent",
+              },
+            },
+            rightPriceScale: {
+              borderColor: isDark ? "#404040" : "#e1e1e1",
+            },
+            timeScale: {
+              borderColor: isDark ? "#404040" : "#e1e1e1",
+            },
+          });
+
+          rsiChart.applyOptions({
+            layout: {
+              backgroundColor: isDark ? "#404040" : "#e1e1e1",
+              textColor: isDark ? "#404040" : "#e1e1e1",
+            },
+            grid: {
+              vertLines: {
+                color: "transparent",
+              },
+              horzLines: {
+                color: "transparent",
+              },
+            },
+            rightPriceScale: {
+              borderColor: isDark ? "#404040" : "#e1e1e1",
+            },
+            timeScale: {
+              borderColor: isDark ? "#404040" : "#e1e1e1",
+            },
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
